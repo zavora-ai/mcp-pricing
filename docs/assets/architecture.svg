@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 550">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#a78bfa"/>
+    </marker>
+  </defs>
+
+  <rect width="900" height="550" fill="url(#bg)" rx="12"/>
+  <text x="450" y="32" text-anchor="middle" fill="#f1f5f9" font-family="system-ui" font-size="16" font-weight="bold">mcp-pricing v2.0 — Enterprise Pricing Engine</text>
+
+  <!-- Agent -->
+  <rect x="20" y="55" width="130" height="60" fill="url(#card)" stroke="#6366f1" stroke-width="2" rx="8"/>
+  <text x="85" y="80" text-anchor="middle" fill="#e2e8f0" font-family="system-ui" font-size="11" font-weight="bold">AI Agent</text>
+  <text x="85" y="98" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="8">MCP Client</text>
+
+  <line x1="150" y1="85" x2="195" y2="85" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Tool Router -->
+  <rect x="200" y="50" width="680" height="70" fill="url(#card)" stroke="#8b5cf6" stroke-width="2" rx="8"/>
+  <text x="540" y="72" text-anchor="middle" fill="#e2e8f0" font-family="system-ui" font-size="12" font-weight="bold">Tool Router — 21 Tools</text>
+
+  <!-- Tool pills row 1 -->
+  <rect x="215" y="82" width="85" height="16" fill="#4c1d95" rx="3"/>
+  <text x="257" y="93" text-anchor="middle" fill="#c4b5fd" font-family="system-ui" font-size="7">price_calculate</text>
+  <rect x="305" y="82" width="70" height="16" fill="#4c1d95" rx="3"/>
+  <text x="340" y="93" text-anchor="middle" fill="#c4b5fd" font-family="system-ui" font-size="7">rules_create</text>
+  <rect x="380" y="82" width="75" height="16" fill="#4c1d95" rx="3"/>
+  <text x="417" y="93" text-anchor="middle" fill="#c4b5fd" font-family="system-ui" font-size="7">catalog_upsert</text>
+  <rect x="460" y="82" width="80" height="16" fill="#4c1d95" rx="3"/>
+  <text x="500" y="93" text-anchor="middle" fill="#c4b5fd" font-family="system-ui" font-size="7">promos_create</text>
+  <rect x="545" y="82" width="75" height="16" fill="#4c1d95" rx="3"/>
+  <text x="582" y="93" text-anchor="middle" fill="#c4b5fd" font-family="system-ui" font-size="7">quotes_create</text>
+  <rect x="625" y="82" width="80" height="16" fill="#4c1d95" rx="3"/>
+  <text x="665" y="93" text-anchor="middle" fill="#c4b5fd" font-family="system-ui" font-size="7">market_fx_conv</text>
+  <rect x="710" y="82" width="60" height="16" fill="#4c1d95" rx="3"/>
+  <text x="740" y="93" text-anchor="middle" fill="#c4b5fd" font-family="system-ui" font-size="7">audit_log</text>
+  <rect x="775" y="82" width="90" height="16" fill="#4c1d95" rx="3"/>
+  <text x="820" y="93" text-anchor="middle" fill="#c4b5fd" font-family="system-ui" font-size="7">segments_create</text>
+
+  <!-- Price Waterfall -->
+  <rect x="20" y="145" width="860" height="130" fill="url(#card)" stroke="#10b981" stroke-width="2" rx="8"/>
+  <text x="450" y="168" text-anchor="middle" fill="#e2e8f0" font-family="system-ui" font-size="12" font-weight="bold">Price Waterfall (6 Steps)</text>
+
+  <!-- Waterfall steps -->
+  <rect x="40" y="185" width="100" height="35" fill="#064e3b" stroke="#10b981" stroke-width="1" rx="4"/>
+  <text x="90" y="200" text-anchor="middle" fill="#6ee7b7" font-family="system-ui" font-size="8" font-weight="bold">1. List Price</text>
+  <text x="90" y="213" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="7">From catalog</text>
+
+  <line x1="140" y1="202" x2="165" y2="202" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="170" y="185" width="100" height="35" fill="#064e3b" stroke="#10b981" stroke-width="1" rx="4"/>
+  <text x="220" y="200" text-anchor="middle" fill="#6ee7b7" font-family="system-ui" font-size="8" font-weight="bold">2. Segment</text>
+  <text x="220" y="213" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="7">Customer tier</text>
+
+  <line x1="270" y1="202" x2="295" y2="202" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="300" y="185" width="100" height="35" fill="#064e3b" stroke="#10b981" stroke-width="1" rx="4"/>
+  <text x="350" y="200" text-anchor="middle" fill="#6ee7b7" font-family="system-ui" font-size="8" font-weight="bold">3. Promotions</text>
+  <text x="350" y="213" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="7">Coupons/deals</text>
+
+  <line x1="400" y1="202" x2="425" y2="202" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="430" y="185" width="100" height="35" fill="#064e3b" stroke="#10b981" stroke-width="1" rx="4"/>
+  <text x="480" y="200" text-anchor="middle" fill="#6ee7b7" font-family="system-ui" font-size="8" font-weight="bold">4. CEL Rules</text>
+  <text x="480" y="213" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="7">Priority-sorted</text>
+
+  <line x1="530" y1="202" x2="555" y2="202" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="560" y="185" width="100" height="35" fill="#064e3b" stroke="#10b981" stroke-width="1" rx="4"/>
+  <text x="610" y="200" text-anchor="middle" fill="#6ee7b7" font-family="system-ui" font-size="8" font-weight="bold">5. Guards</text>
+  <text x="610" y="213" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="7">Floor/ceiling</text>
+
+  <line x1="660" y1="202" x2="685" y2="202" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="690" y="185" width="100" height="35" fill="#064e3b" stroke="#10b981" stroke-width="1" rx="4"/>
+  <text x="740" y="200" text-anchor="middle" fill="#6ee7b7" font-family="system-ui" font-size="8" font-weight="bold">6. Tax</text>
+  <text x="740" y="213" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="7">VAT/GST</text>
+
+  <!-- Example -->
+  <text x="450" y="250" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="9">KES 500 → 500 (list) → 425 (rule: qty≥10 → -15%) → 493 (tax: 16% KE VAT) → Net: KES 425 + Tax: KES 68</text>
+
+  <!-- CEL Engine -->
+  <rect x="20" y="295" width="420" height="110" fill="url(#card)" stroke="#f59e0b" stroke-width="2" rx="8"/>
+  <text x="230" y="318" text-anchor="middle" fill="#e2e8f0" font-family="system-ui" font-size="11" font-weight="bold">CEL Rule Engine</text>
+  <text x="40" y="340" fill="#fbbf24" font-family="monospace" font-size="8">item.quantity >= 10</text>
+  <text x="40" y="355" fill="#fbbf24" font-family="monospace" font-size="8">customer.country in ["KE", "TZ", "UG"]</text>
+  <text x="40" y="370" fill="#fbbf24" font-family="monospace" font-size="8">catalog.category == "SaaS" && customer.annual_spend > 100000</text>
+  <text x="40" y="385" fill="#fbbf24" font-family="monospace" font-size="8">item.channel == "marketplace"</text>
+
+  <!-- Data Store -->
+  <rect x="460" y="295" width="420" height="110" fill="url(#card)" stroke="#06b6d4" stroke-width="2" rx="8"/>
+  <text x="670" y="318" text-anchor="middle" fill="#e2e8f0" font-family="system-ui" font-size="11" font-weight="bold">Data Store</text>
+  <rect x="480" y="330" width="75" height="20" fill="#164e63" rx="3"/>
+  <text x="517" y="344" text-anchor="middle" fill="#67e8f9" font-family="system-ui" font-size="8">Products</text>
+  <rect x="560" y="330" width="55" height="20" fill="#164e63" rx="3"/>
+  <text x="587" y="344" text-anchor="middle" fill="#67e8f9" font-family="system-ui" font-size="8">Rules</text>
+  <rect x="620" y="330" width="70" height="20" fill="#164e63" rx="3"/>
+  <text x="655" y="344" text-anchor="middle" fill="#67e8f9" font-family="system-ui" font-size="8">Segments</text>
+  <rect x="695" y="330" width="75" height="20" fill="#164e63" rx="3"/>
+  <text x="732" y="344" text-anchor="middle" fill="#67e8f9" font-family="system-ui" font-size="8">Promotions</text>
+  <rect x="775" y="330" width="60" height="20" fill="#164e63" rx="3"/>
+  <text x="805" y="344" text-anchor="middle" fill="#67e8f9" font-family="system-ui" font-size="8">Quotes</text>
+  <rect x="480" y="360" width="60" height="20" fill="#164e63" rx="3"/>
+  <text x="510" y="374" text-anchor="middle" fill="#67e8f9" font-family="system-ui" font-size="8">Audit</text>
+  <rect x="545" y="360" width="55" height="20" fill="#164e63" rx="3"/>
+  <text x="572" y="374" text-anchor="middle" fill="#67e8f9" font-family="system-ui" font-size="8">FX API</text>
+
+  <!-- Use cases -->
+  <rect x="20" y="425" width="860" height="110" fill="url(#card)" stroke="#475569" stroke-width="1" rx="8"/>
+  <text x="450" y="448" text-anchor="middle" fill="#e2e8f0" font-family="system-ui" font-size="11" font-weight="bold">Multi-Vertical Coverage</text>
+
+  <text x="60" y="475" fill="#a78bfa" font-family="system-ui" font-size="9">🚕 Ride-Hailing</text>
+  <text x="60" y="490" fill="#94a3b8" font-family="system-ui" font-size="7">Surge pricing, loyalty</text>
+  <text x="60" y="503" fill="#94a3b8" font-family="system-ui" font-size="7">discounts, peak rules</text>
+
+  <text x="210" y="475" fill="#a78bfa" font-family="system-ui" font-size="9">💻 SaaS</text>
+  <text x="210" y="490" fill="#94a3b8" font-family="system-ui" font-size="7">Seat-based, annual</text>
+  <text x="210" y="503" fill="#94a3b8" font-family="system-ui" font-size="7">discount, enterprise</text>
+
+  <text x="350" y="475" fill="#a78bfa" font-family="system-ui" font-size="9">🛒 E-Commerce</text>
+  <text x="350" y="490" fill="#94a3b8" font-family="system-ui" font-size="7">Volume tiers, coupons</text>
+  <text x="350" y="503" fill="#94a3b8" font-family="system-ui" font-size="7">flash sales, bundles</text>
+
+  <text x="500" y="475" fill="#a78bfa" font-family="system-ui" font-size="9">📦 Logistics</text>
+  <text x="500" y="490" fill="#94a3b8" font-family="system-ui" font-size="7">Weight + distance</text>
+  <text x="500" y="503" fill="#94a3b8" font-family="system-ui" font-size="7">speed tiers, zones</text>
+
+  <text x="640" y="475" fill="#a78bfa" font-family="system-ui" font-size="9">🏪 Marketplace</text>
+  <text x="640" y="490" fill="#94a3b8" font-family="system-ui" font-size="7">Vendor fees, channel</text>
+  <text x="640" y="503" fill="#94a3b8" font-family="system-ui" font-size="7">markup, floor guards</text>
+
+  <text x="790" y="475" fill="#a78bfa" font-family="system-ui" font-size="9">⚖️ Services</text>
+  <text x="790" y="490" fill="#94a3b8" font-family="system-ui" font-size="7">Hourly rates, quotes</text>
+  <text x="790" y="503" fill="#94a3b8" font-family="system-ui" font-size="7">CPQ, approvals</text>
+</svg>
