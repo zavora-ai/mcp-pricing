@@ -2,7 +2,7 @@
 
 [package]
 name = "mcp-pricing"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2024"
 description = "Enterprise pricing engine MCP server — CEL rule engine, price waterfall, catalog, segments, promotions, quotes, market intel, audit (35+ tools)"
 license = "Apache-2.0"

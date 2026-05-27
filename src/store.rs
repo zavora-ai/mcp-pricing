@@ -10,6 +10,7 @@ fn uid() -> String { uuid::Uuid::new_v4().to_string()[..8].to_string() }
 pub struct Store {
     pub products: Arc<Mutex<HashMap<String, Product>>>,
     pub rules: Arc<Mutex<Vec<PricingRule>>>,
+    pub rule_versions: Arc<Mutex<Vec<RuleVersion>>>,
     pub segments: Arc<Mutex<Vec<Segment>>>,
     pub promotions: Arc<Mutex<Vec<Promotion>>>,
     pub quotes: Arc<Mutex<HashMap<String, Quote>>>,
@@ -21,6 +22,7 @@ impl Store {
         Self {
             products: Arc::new(Mutex::new(HashMap::new())),
             rules: Arc::new(Mutex::new(Vec::new())),
+            rule_versions: Arc::new(Mutex::new(Vec::new())),
             segments: Arc::new(Mutex::new(Vec::new())),
             promotions: Arc::new(Mutex::new(Vec::new())),
             quotes: Arc::new(Mutex::new(HashMap::new())),
@@ -54,16 +56,45 @@ impl Store {
     // Rule CRUD
     pub fn add_rule(&self, mut r: PricingRule) -> String {
         r.id = format!("rule_{}", uid());
+        r.version = 1;
         r.created_at = now();
         r.updated_at = now();
         let id = r.id.clone();
         self.log_audit("rule", &id, "created", "system", json!({"name": r.name}));
+        self.rule_versions.lock().unwrap().push(RuleVersion {
+            rule_id: id.clone(), version: 1, snapshot: r.clone(), changed_at: now(), reason: "Initial creation".into(),
+        });
         self.rules.lock().unwrap().push(r);
         id
     }
 
+    pub fn update_rule(&self, rule_id: &str, updater: impl FnOnce(&mut PricingRule), reason: &str) -> bool {
+        let mut rules = self.rules.lock().unwrap();
+        if let Some(r) = rules.iter_mut().find(|r| r.id == rule_id) {
+            updater(r);
+            r.version += 1;
+            r.updated_at = now();
+            let ver = r.version;
+            let snapshot = r.clone();
+            drop(rules);
+            self.rule_versions.lock().unwrap().push(RuleVersion {
+                rule_id: rule_id.into(), version: ver, snapshot, changed_at: now(), reason: reason.into(),
+            });
+            self.log_audit("rule", rule_id, "updated", "system", json!({"version": ver, "reason": reason}));
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn get_active_rules(&self) -> Vec<PricingRule> {
-        let mut rules: Vec<_> = self.rules.lock().unwrap().iter().filter(|r| r.active).cloned().collect();
+        let now_str = now();
+        let mut rules: Vec<_> = self.rules.lock().unwrap().iter().filter(|r| {
+            if !r.active { return false; }
+            if let Some(ref from) = r.schedule_from { if now_str < *from { return false; } }
+            if let Some(ref until) = r.schedule_until { if now_str > *until { return false; } }
+            true
+        }).cloned().collect();
         rules.sort_by_key(|r| r.priority);
         rules
     }

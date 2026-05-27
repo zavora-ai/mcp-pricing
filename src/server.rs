@@ -181,6 +181,50 @@ pub struct CelValidateInput {
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct RuleUpdateInput {
+    /// Rule ID to update
+    pub rule_id: String,
+    /// New CEL condition (optional)
+    pub condition: Option<String>,
+    /// New actions (optional)
+    pub actions: Option<Vec<Value>>,
+    /// New priority (optional)
+    pub priority: Option<i32>,
+    /// New name (optional)
+    pub name: Option<String>,
+    /// Reason for change (for version history)
+    pub reason: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct RuleHistoryInput {
+    /// Rule ID
+    pub rule_id: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct RuleScheduleInput {
+    /// Rule ID
+    pub rule_id: String,
+    /// Activate from (ISO datetime, e.g. "2026-06-01T00:00:00Z")
+    pub schedule_from: Option<String>,
+    /// Deactivate after (ISO datetime)
+    pub schedule_until: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct RuleTestInput {
+    /// Rule ID to test (or provide rule_condition + rule_actions for ad-hoc)
+    pub rule_id: Option<String>,
+    /// Ad-hoc CEL condition (if no rule_id)
+    pub rule_condition: Option<String>,
+    /// Ad-hoc actions (if no rule_id)
+    pub rule_actions: Option<Vec<Value>>,
+    /// Test cases: [{"sku": "...", "quantity": N, "channel": "...", "expected_discount_pct": N}]
+    pub test_cases: Vec<Value>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct TaxInput {
     /// Amount before tax
     pub amount: f64,
@@ -294,10 +338,11 @@ impl PricingServer {
             Some(PricingAction { action_type: a["type"].as_str()?.into(), value: a["value"].as_f64()? })
         }).collect();
         let rule = PricingRule {
-            id: String::new(), name: input.name, description: input.description.unwrap_or_default(),
+            id: String::new(), version: 0, name: input.name, description: input.description.unwrap_or_default(),
             priority: input.priority.unwrap_or(100), condition: input.condition, actions,
             segments: input.segments, channels: input.channels,
             tags: input.tags.unwrap_or_default(), active: input.active.unwrap_or(false),
+            schedule_from: None, schedule_until: None,
             created_at: String::new(), updated_at: String::new(),
         };
         let id = self.store.add_rule(rule);
@@ -334,6 +379,143 @@ impl PricingServer {
         } else {
             json!({"error": "RULE_NOT_FOUND", "rule_id": input.rule_id}).to_string()
         }
+    }
+
+    #[tool(description = "Update a pricing rule (creates a new version, preserving history). Only provided fields are changed.")]
+    async fn rules_update(&self, Parameters(input): Parameters<RuleUpdateInput>) -> String {
+        if let Some(ref cond) = input.condition {
+            if let Err(e) = engine::validate_cel(cond) {
+                return json!({"error": "CONDITION_PARSE_ERROR", "details": e}).to_string();
+            }
+        }
+        let actions_parsed: Option<Vec<PricingAction>> = input.actions.as_ref().map(|acts| {
+            acts.iter().filter_map(|a| Some(PricingAction { action_type: a["type"].as_str()?.into(), value: a["value"].as_f64()? })).collect()
+        });
+        let success = self.store.update_rule(&input.rule_id, |r| {
+            if let Some(ref cond) = input.condition { r.condition = cond.clone(); }
+            if let Some(ref acts) = actions_parsed { r.actions = acts.clone(); }
+            if let Some(p) = input.priority { r.priority = p; }
+            if let Some(ref n) = input.name { r.name = n.clone(); }
+        }, &input.reason);
+        if success {
+            let rules = self.store.rules.lock().unwrap();
+            let ver = rules.iter().find(|r| r.id == input.rule_id).map(|r| r.version).unwrap_or(0);
+            json!({"status": "updated", "rule_id": input.rule_id, "version": ver, "reason": input.reason}).to_string()
+        } else {
+            json!({"error": "RULE_NOT_FOUND", "rule_id": input.rule_id}).to_string()
+        }
+    }
+
+    #[tool(description = "Get version history of a rule (all past versions with diffs and reasons).")]
+    async fn rules_history(&self, Parameters(input): Parameters<RuleHistoryInput>) -> String {
+        let versions: Vec<_> = self.store.rule_versions.lock().unwrap().iter()
+            .filter(|v| v.rule_id == input.rule_id).cloned().collect();
+        if versions.is_empty() {
+            return json!({"error": "RULE_NOT_FOUND", "rule_id": input.rule_id}).to_string();
+        }
+        json!({"rule_id": input.rule_id, "versions": versions.len(), "history": versions}).to_string()
+    }
+
+    #[tool(description = "Schedule a rule to activate/deactivate at specific times. Set schedule_from and/or schedule_until (ISO datetime).")]
+    async fn rules_schedule(&self, Parameters(input): Parameters<RuleScheduleInput>) -> String {
+        let success = self.store.update_rule(&input.rule_id, |r| {
+            r.schedule_from = input.schedule_from.clone();
+            r.schedule_until = input.schedule_until.clone();
+            r.active = true; // activate so schedule controls it
+        }, "Scheduled activation");
+        if success {
+            json!({"status": "scheduled", "rule_id": input.rule_id, "schedule_from": input.schedule_from, "schedule_until": input.schedule_until}).to_string()
+        } else {
+            json!({"error": "RULE_NOT_FOUND"}).to_string()
+        }
+    }
+
+    #[tool(description = "Detect conflicting rules — rules with overlapping conditions at the same priority that could produce ambiguous results.")]
+    async fn rules_conflicts(&self) -> String {
+        let rules = self.store.rules.lock().unwrap().clone();
+        let active: Vec<_> = rules.iter().filter(|r| r.active).collect();
+        let mut conflicts = Vec::new();
+        for i in 0..active.len() {
+            for j in (i+1)..active.len() {
+                let a = &active[i];
+                let b = &active[j];
+                // Same priority = potential conflict
+                if a.priority == b.priority {
+                    // Check if segments/channels overlap
+                    let seg_overlap = match (&a.segments, &b.segments) {
+                        (None, _) | (_, None) => true,
+                        (Some(sa), Some(sb)) => sa.iter().any(|s| sb.contains(s)),
+                    };
+                    let ch_overlap = match (&a.channels, &b.channels) {
+                        (None, _) | (_, None) => true,
+                        (Some(ca), Some(cb)) => ca.iter().any(|c| cb.contains(c)),
+                    };
+                    if seg_overlap && ch_overlap {
+                        conflicts.push(json!({
+                            "rule_a": {"id": a.id, "name": a.name, "priority": a.priority},
+                            "rule_b": {"id": b.id, "name": b.name, "priority": b.priority},
+                            "reason": "Same priority with overlapping scope",
+                            "suggestion": "Change priority of one rule to establish deterministic ordering"
+                        }));
+                    }
+                }
+            }
+        }
+        json!({"conflicts": conflicts.len(), "details": conflicts}).to_string()
+    }
+
+    #[tool(description = "Dry-run a rule against test cases without affecting live pricing. Returns pass/fail for each case.")]
+    async fn rules_test(&self, Parameters(input): Parameters<RuleTestInput>) -> String {
+        let (condition, actions) = if let Some(ref id) = input.rule_id {
+            let rules = self.store.rules.lock().unwrap();
+            match rules.iter().find(|r| r.id == *id) {
+                Some(r) => (r.condition.clone(), r.actions.clone()),
+                None => return json!({"error": "RULE_NOT_FOUND"}).to_string(),
+            }
+        } else {
+            let cond = input.rule_condition.unwrap_or_default();
+            let acts: Vec<PricingAction> = input.rule_actions.unwrap_or_default().iter().filter_map(|a| {
+                Some(PricingAction { action_type: a["type"].as_str()?.into(), value: a["value"].as_f64()? })
+            }).collect();
+            (cond, acts)
+        };
+
+        let mut results = Vec::new();
+        for case in &input.test_cases {
+            let sku = case["sku"].as_str().unwrap_or("TEST");
+            let qty = case["quantity"].as_f64().unwrap_or(1.0);
+            let channel = case["channel"].as_str().unwrap_or("direct");
+            let list_price = case["list_price"].as_f64().unwrap_or(
+                self.store.get_product(sku).map(|p| p.list_price).unwrap_or(100.0)
+            );
+
+            let vars = engine::CelVars {
+                sku: sku.into(), quantity: qty, channel: channel.into(),
+                customer_id: String::new(), segment: String::new(),
+                country: case["country"].as_str().unwrap_or("US").into(),
+                annual_spend: 0.0, list_price, cost: 0.0, category: String::new(),
+            };
+
+            let matched = condition.is_empty() || engine::eval_cel(&condition, &vars);
+            let mut price = list_price;
+            if matched {
+                for action in &actions {
+                    match action.action_type.as_str() {
+                        "pct_discount" => price *= 1.0 - (action.value / 100.0),
+                        "absolute_discount" => price -= action.value,
+                        "markup_pct" => price *= 1.0 + (action.value / 100.0),
+                        "set_price" => price = action.value,
+                        "multiply_price" => price *= action.value,
+                        _ => {}
+                    }
+                }
+            }
+            let expected = case["expected_price"].as_f64();
+            let passed = expected.map_or(true, |e| (round2(price) - e).abs() < 0.01);
+            results.push(json!({"sku": sku, "quantity": qty, "condition_matched": matched, "result_price": round2(price), "expected": expected, "passed": passed}));
+        }
+        let all_passed = results.iter().all(|r| r["passed"].as_bool().unwrap_or(false));
+        json!({"passed": all_passed, "cases": results.len(), "results": results}).to_string()
     }
 
     // === Segments ===

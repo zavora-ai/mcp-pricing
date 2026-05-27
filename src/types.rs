@@ -18,6 +18,7 @@ pub struct Product {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PricingRule {
     pub id: String,
+    pub version: u32,
     pub name: String,
     pub description: String,
     pub priority: i32,
@@ -27,8 +28,19 @@ pub struct PricingRule {
     pub channels: Option<Vec<String>>,
     pub tags: Vec<String>,
     pub active: bool,
+    pub schedule_from: Option<String>,
+    pub schedule_until: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RuleVersion {
+    pub rule_id: String,
+    pub version: u32,
+    pub snapshot: PricingRule,
+    pub changed_at: String,
+    pub reason: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
