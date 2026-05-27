@@ -2,12 +2,12 @@
 
 [package]
 name = "mcp-pricing"
-version = "1.0.0"
+version = "2.0.0"
 edition = "2024"
-description = "Multi-vertical pricing engine MCP server — fare calculation, dynamic pricing, currency conversion, tax, subscriptions, tiered pricing, discounts, invoicing"
+description = "Enterprise pricing engine MCP server — CEL rule engine, price waterfall, catalog, segments, promotions, quotes, market intel, audit (35+ tools)"
 license = "Apache-2.0"
 repository = "https://github.com/zavora-ai/mcp-pricing"
-keywords = ["mcp", "pricing", "billing", "currency", "invoicing"]
+keywords = ["mcp", "pricing", "billing", "rules-engine", "cel"]
 categories = ["api-bindings"]
 
 [dependencies]
@@ -19,3 +19,6 @@ serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+cel-interpreter = "0.10"
+cel-parser = "0.10"

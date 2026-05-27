@@ -1,4 +1,8 @@
+mod types;
+mod store;
+mod engine;
 mod server;
+
 use rmcp::{ServiceExt, transport::stdio};
 
 #[tokio::main]

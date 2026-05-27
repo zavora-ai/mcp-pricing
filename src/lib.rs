@@ -1,6 +1,9 @@
 //! # mcp-pricing
 //!
-//! Multi-vertical pricing engine MCP server — fare calculation, delivery fees,
-//! subscriptions, currency conversion, tax, tiered pricing, margins, invoicing,
-//! surge pricing, bundles, discounts, and payment splitting.
+//! Enterprise pricing engine MCP server — CEL rule engine, price waterfall,
+//! product catalog, customer segments, promotions, quotes/CPQ, market intelligence,
+//! and audit trail. 20+ tools for multi-vertical pricing.
+pub mod types;
+pub mod store;
+pub mod engine;
 pub mod server;

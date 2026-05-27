@@ -1,382 +1,538 @@
 use rmcp::{handler::server::wrapper::Parameters, schemars, tool, tool_router};
 use reqwest::Client;
 use serde_json::{json, Value};
+use crate::types::*;
+use crate::store::Store;
+use crate::engine;
 
 fn now() -> String { chrono::Utc::now().to_rfc3339() }
+fn round2(v: f64) -> f64 { (v * 100.0).round() / 100.0 }
 
-// --- Input types ---
+// --- Input Types ---
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct FareInput {
-    /// Distance in km
-    pub distance_km: f64,
-    /// Duration in minutes
-    pub duration_min: f64,
-    /// Base fare (flat fee)
-    pub base_fare: f64,
-    /// Rate per km
-    pub per_km_rate: f64,
-    /// Rate per minute
-    pub per_min_rate: f64,
-    /// Surge multiplier (default 1.0)
-    pub surge: Option<f64>,
-    /// Booking/service fee
-    pub booking_fee: Option<f64>,
-    /// Minimum fare
-    pub minimum_fare: Option<f64>,
-    /// Currency code (e.g. "KES", "USD")
-    pub currency: Option<String>,
+pub struct PriceCalcInput {
+    /// SKU to price
+    pub sku: String,
+    /// Quantity
+    pub quantity: f64,
+    /// Sales channel (direct, marketplace, partner, api)
+    pub channel: Option<String>,
+    /// Customer ID (for segment lookup)
+    pub customer_id: Option<String>,
+    /// Customer country (ISO 3166-1 alpha-2)
+    pub country: Option<String>,
+    /// Include waterfall explanation
+    pub explain: Option<bool>,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct DeliveryInput {
-    /// Distance in km
-    pub distance_km: f64,
-    /// Package weight in kg
-    pub weight_kg: f64,
-    /// Base delivery fee
-    pub base_fee: f64,
-    /// Rate per km
-    pub per_km_rate: f64,
-    /// Rate per kg (for weight surcharge)
-    pub per_kg_rate: Option<f64>,
-    /// Speed tier: standard, express, same_day (multipliers: 1.0, 1.5, 2.5)
-    pub speed_tier: Option<String>,
-    /// Currency code
+pub struct ProductInput {
+    /// SKU identifier
+    pub sku: String,
+    /// Product name
+    pub name: String,
+    /// Category
+    pub category: String,
+    /// List price
+    pub list_price: f64,
+    /// Cost of goods
+    pub cost: f64,
+    /// Currency (ISO 4217)
     pub currency: Option<String>,
+    /// Tags
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct DiscountInput {
-    /// Original amount
-    pub amount: f64,
-    /// Discount type: percentage, fixed, bogo (buy one get one)
+pub struct SkuInput {
+    /// SKU to look up
+    pub sku: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct RuleInput {
+    /// Rule name
+    pub name: String,
+    /// Description
+    pub description: Option<String>,
+    /// Priority (lower = higher priority)
+    pub priority: Option<i32>,
+    /// CEL condition expression
+    pub condition: String,
+    /// Actions: [{"type": "pct_discount", "value": 10}]
+    pub actions: Vec<Value>,
+    /// Limit to segment IDs
+    pub segments: Option<Vec<String>>,
+    /// Limit to channels
+    pub channels: Option<Vec<String>>,
+    /// Tags
+    pub tags: Option<Vec<String>>,
+    /// Active immediately
+    pub active: Option<bool>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct RuleIdInput {
+    /// Rule ID
+    pub rule_id: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct SegmentInput {
+    /// Segment name
+    pub name: String,
+    /// CEL condition (e.g. "customer.annual_spend > 50000")
+    pub condition: String,
+    /// Priority
+    pub priority: Option<i32>,
+    /// Default discount percentage for this segment
+    pub discount_pct: Option<f64>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct PromoInput {
+    /// Promotion name
+    pub name: String,
+    /// Type: coupon, volume_tier, bogo, flash_sale, loyalty
+    pub promo_type: String,
+    /// Coupon code (for coupon type)
+    pub code: Option<String>,
+    /// Discount type: pct, absolute, free_item
     pub discount_type: String,
-    /// Discount value (percentage 0-100, or fixed amount)
-    pub value: f64,
-    /// Maximum discount cap (optional)
-    pub max_discount: Option<f64>,
-    /// Minimum order amount to qualify (optional)
-    pub min_order: Option<f64>,
-    /// Currency code
-    pub currency: Option<String>,
+    /// Discount value
+    pub discount_value: f64,
+    /// CEL condition
+    pub condition: Option<String>,
+    /// Max total uses
+    pub max_uses: Option<u32>,
+    /// Valid from (ISO datetime)
+    pub valid_from: Option<String>,
+    /// Valid until (ISO datetime)
+    pub valid_until: Option<String>,
+    /// Can stack with other promotions
+    pub stackable: Option<bool>,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct SubscriptionInput {
-    /// Monthly base price
-    pub monthly_price: f64,
-    /// Billing cycle: monthly, quarterly, annual
-    pub billing_cycle: String,
-    /// Number of seats/users
-    pub seats: Option<u32>,
-    /// Per-seat price (if seat-based)
-    pub per_seat_price: Option<f64>,
-    /// Annual discount percentage (e.g. 20 for 20% off annual)
-    pub annual_discount_pct: Option<f64>,
-    /// Currency code
+pub struct PromoApplyInput {
+    /// Promotion code or ID
+    pub code: String,
+    /// SKU
+    pub sku: String,
+    /// Quantity
+    pub quantity: f64,
+    /// Customer ID
+    pub customer_id: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct QuoteInput {
+    /// Customer ID
+    pub customer_id: String,
+    /// Line items: [{"sku": "...", "quantity": N}]
+    pub items: Vec<Value>,
+    /// Currency
     pub currency: Option<String>,
+    /// Valid days (default 30)
+    pub valid_days: Option<u32>,
+    /// Notes
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct QuoteIdInput {
+    /// Quote ID
+    pub quote_id: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct CurrencyInput {
-    /// Amount to convert
+    /// Amount
     pub amount: f64,
-    /// Source currency (ISO 4217, e.g. "USD")
+    /// From currency
     pub from: String,
-    /// Target currency (ISO 4217, e.g. "KES")
+    /// To currency
     pub to: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct FxRatesInput {
+    /// Base currency
+    pub base: String,
+    /// Target currencies
+    pub targets: Vec<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct AuditInput {
+    /// Entity type filter: rule, product, quote, promotion, segment
+    pub entity_type: Option<String>,
+    /// Entity ID filter
+    pub entity_id: Option<String>,
+    /// Max results
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct CelValidateInput {
+    /// CEL expression to validate
+    pub expression: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct TaxInput {
     /// Amount before tax
     pub amount: f64,
-    /// Country code (ISO 3166-1 alpha-2, e.g. "KE", "US", "DE")
+    /// Country code
     pub country: String,
-    /// State/region (for US sales tax, e.g. "CA", "TX")
+    /// State (for US)
     pub state: Option<String>,
-    /// Tax type: vat, gst, sales_tax, auto (default: auto)
-    pub tax_type: Option<String>,
-    /// Custom tax rate override (percentage)
-    pub custom_rate: Option<f64>,
 }
 
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct TieredInput {
-    /// Usage/quantity
-    pub quantity: f64,
-    /// Tiers as array of [limit, price_per_unit] (e.g. [[100, 0.10], [1000, 0.08], [0, 0.05]])
-    /// Last tier with limit 0 means unlimited
-    pub tiers: Vec<[f64; 2]>,
-    /// Unit label (e.g. "API calls", "GB", "messages")
-    pub unit: Option<String>,
-    /// Currency code
-    pub currency: Option<String>,
-}
-
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct SplitInput {
-    /// Total amount
-    pub total: f64,
-    /// Number of parties
-    pub parties: u32,
-    /// Split type: equal, percentage, custom
-    pub split_type: String,
-    /// Custom splits (for percentage: [50, 30, 20], for custom: [100, 50, 75])
-    pub splits: Option<Vec<f64>>,
-    /// Currency code
-    pub currency: Option<String>,
-}
-
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct MarginInput {
-    /// Cost price
-    pub cost: f64,
-    /// Target margin percentage (e.g. 30 for 30%)
-    pub margin_pct: Option<f64>,
-    /// Target markup percentage (e.g. 50 for 50%)
-    pub markup_pct: Option<f64>,
-    /// Selling price (to calculate margin from)
-    pub selling_price: Option<f64>,
-    /// Currency code
-    pub currency: Option<String>,
-}
-
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct InvoiceInput {
-    /// Line items: [{"description": "...", "quantity": N, "unit_price": X}]
-    pub items: Vec<Value>,
-    /// Tax rate percentage (e.g. 16 for 16% VAT)
-    pub tax_rate: Option<f64>,
-    /// Discount percentage on subtotal
-    pub discount_pct: Option<f64>,
-    /// Currency code
-    pub currency: Option<String>,
-}
-
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct SurgeInput {
-    /// Current demand (e.g. ride requests per minute)
-    pub demand: f64,
-    /// Current supply (e.g. available drivers)
-    pub supply: f64,
-    /// Base multiplier (default 1.0)
-    pub base_multiplier: Option<f64>,
-    /// Max multiplier cap (default 5.0)
-    pub max_multiplier: Option<f64>,
-}
-
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct BundleInput {
-    /// Individual item prices
-    pub items: Vec<f64>,
-    /// Bundle discount percentage
-    pub bundle_discount_pct: f64,
-    /// Currency code
-    pub currency: Option<String>,
-}
+// --- Server ---
 
 #[derive(Clone)]
 pub struct PricingServer {
     pub client: Client,
+    pub store: Store,
 }
 
 impl PricingServer {
-    pub fn new() -> Self { Self { client: Client::builder().build().unwrap_or_default() } }
+    pub fn new() -> Self {
+        Self { client: Client::builder().build().unwrap_or_default(), store: Store::new() }
+    }
 }
 
 #[tool_router(server_handler)]
 impl PricingServer {
-    #[tool(description = "Calculate ride/transport fare (distance × rate + time × rate + base + surge). Works for ride-hailing, taxi, ambulance, tow trucks.")]
-    async fn calculate_fare(&self, Parameters(input): Parameters<FareInput>) -> String {
-        let surge = input.surge.unwrap_or(1.0);
-        let booking_fee = input.booking_fee.unwrap_or(0.0);
-        let currency = input.currency.as_deref().unwrap_or("USD");
-        let distance_cost = input.distance_km * input.per_km_rate;
-        let time_cost = input.duration_min * input.per_min_rate;
-        let subtotal = (input.base_fare + distance_cost + time_cost) * surge + booking_fee;
-        let total = if let Some(min) = input.minimum_fare { subtotal.max(min) } else { subtotal };
-        json!({
-            "breakdown": {"base_fare": input.base_fare, "distance_cost": round2(distance_cost), "time_cost": round2(time_cost), "surge_multiplier": surge, "booking_fee": booking_fee},
-            "subtotal": round2(subtotal), "total": round2(total), "currency": currency,
-            "distance_km": input.distance_km, "duration_min": input.duration_min
-        }).to_string()
-    }
+    // === Price Calculation ===
 
-    #[tool(description = "Calculate delivery fee (distance + weight + speed tier). Works for food delivery, parcels, freight.")]
-    async fn calculate_delivery(&self, Parameters(input): Parameters<DeliveryInput>) -> String {
-        let currency = input.currency.as_deref().unwrap_or("USD");
-        let per_kg = input.per_kg_rate.unwrap_or(0.0);
-        let speed_mult = match input.speed_tier.as_deref() { Some("express") => 1.5, Some("same_day") => 2.5, Some("overnight") => 2.0, _ => 1.0 };
-        let distance_cost = input.distance_km * input.per_km_rate;
-        let weight_cost = input.weight_kg * per_kg;
-        let total = (input.base_fee + distance_cost + weight_cost) * speed_mult;
-        json!({
-            "breakdown": {"base_fee": input.base_fee, "distance_cost": round2(distance_cost), "weight_surcharge": round2(weight_cost), "speed_multiplier": speed_mult, "speed_tier": input.speed_tier.as_deref().unwrap_or("standard")},
-            "total": round2(total), "currency": currency
-        }).to_string()
-    }
-
-    #[tool(description = "Apply discount (percentage, fixed, or BOGO). Works for coupons, promo codes, loyalty tiers.")]
-    async fn apply_discount(&self, Parameters(input): Parameters<DiscountInput>) -> String {
-        let currency = input.currency.as_deref().unwrap_or("USD");
-        if let Some(min) = input.min_order { if input.amount < min { return json!({"error": "Order below minimum", "min_order": min, "amount": input.amount}).to_string(); } }
-        let discount = match input.discount_type.as_str() {
-            "percentage" => input.amount * (input.value / 100.0),
-            "fixed" => input.value,
-            "bogo" => input.amount / 2.0,
-            _ => 0.0,
+    #[tool(description = "Calculate price through the full waterfall: list → segment → promotions → rules → floor/ceiling → tax. Set explain=true for step-by-step breakdown.")]
+    async fn price_calculate(&self, Parameters(input): Parameters<PriceCalcInput>) -> String {
+        let product = match self.store.get_product(&input.sku) {
+            Some(p) => p,
+            None => return json!({"error": "SKU_NOT_FOUND", "sku": input.sku}).to_string(),
         };
-        let discount = if let Some(cap) = input.max_discount { discount.min(cap) } else { discount };
-        let final_amount = (input.amount - discount).max(0.0);
-        json!({"original": input.amount, "discount": round2(discount), "discount_type": input.discount_type, "final_amount": round2(final_amount), "savings_pct": round2(discount / input.amount * 100.0), "currency": currency}).to_string()
-    }
+        let channel = input.channel.unwrap_or_else(|| "direct".into());
+        let country = input.country.unwrap_or_else(|| "US".into());
+        let explain = input.explain.unwrap_or(false);
 
-    #[tool(description = "Calculate subscription pricing (monthly/quarterly/annual with seats and discounts). Works for SaaS, memberships, plans.")]
-    async fn calculate_subscription(&self, Parameters(input): Parameters<SubscriptionInput>) -> String {
-        let currency = input.currency.as_deref().unwrap_or("USD");
-        let seats = input.seats.unwrap_or(1) as f64;
-        let per_seat = input.per_seat_price.unwrap_or(0.0);
-        let monthly = input.monthly_price + (seats * per_seat);
-        let annual_disc = input.annual_discount_pct.unwrap_or(20.0) / 100.0;
-        let (total, period, savings) = match input.billing_cycle.as_str() {
-            "quarterly" => (monthly * 3.0 * 0.95, "quarter", monthly * 3.0 * 0.05),
-            "annual" | "yearly" => (monthly * 12.0 * (1.0 - annual_disc), "year", monthly * 12.0 * annual_disc),
-            _ => (monthly, "month", 0.0),
+        let vars = engine::CelVars {
+            sku: input.sku.clone(), quantity: input.quantity, channel: channel.clone(),
+            customer_id: input.customer_id.clone().unwrap_or_default(),
+            segment: String::new(), country: country.clone(), annual_spend: 0.0,
+            list_price: product.list_price, cost: product.cost, category: product.category.clone(),
         };
-        json!({"monthly_equivalent": round2(monthly), "billing_cycle": input.billing_cycle, "total": round2(total), "period": period, "seats": seats as u32, "savings": round2(savings), "currency": currency}).to_string()
+
+        let rules = self.store.get_active_rules();
+        let promos = self.store.get_active_promotions();
+        let tax_rate = get_tax_rate(&country, None);
+
+        let (net_price, tax, waterfall) = engine::run_waterfall(
+            product.list_price, &rules, &promos, 0.0, tax_rate, &vars, explain,
+        );
+
+        let line_total = round2(net_price * input.quantity);
+        let tax_total = round2(tax * input.quantity);
+        let mut result = json!({
+            "sku": input.sku, "quantity": input.quantity,
+            "list_price": product.list_price, "net_price": net_price,
+            "line_total": line_total, "tax_amount": tax_total,
+            "total": round2(line_total + tax_total),
+            "currency": product.currency, "tax_rate_pct": tax_rate,
+            "calculated_at": now()
+        });
+        if explain { result["waterfall"] = json!(waterfall); }
+        result.to_string()
     }
 
-    #[tool(description = "Convert currency using live exchange rates (170+ currencies, updated daily). Free, no API key.")]
-    async fn convert_currency(&self, Parameters(input): Parameters<CurrencyInput>) -> String {
+    #[tool(description = "Validate a CEL expression without executing it. Returns parse errors if invalid.")]
+    async fn rules_validate(&self, Parameters(input): Parameters<CelValidateInput>) -> String {
+        match engine::validate_cel(&input.expression) {
+            Ok(()) => json!({"valid": true, "expression": input.expression}).to_string(),
+            Err(e) => json!({"valid": false, "error": e, "expression": input.expression}).to_string(),
+        }
+    }
+
+    // === Product Catalog ===
+
+    #[tool(description = "Add or update a product in the catalog with SKU, name, category, list price, and cost.")]
+    async fn catalog_upsert(&self, Parameters(input): Parameters<ProductInput>) -> String {
+        let p = Product {
+            sku: input.sku.clone(), name: input.name, category: input.category,
+            list_price: input.list_price, cost: input.cost,
+            currency: input.currency.unwrap_or_else(|| "USD".into()),
+            tags: input.tags.unwrap_or_default(), attributes: json!({}),
+        };
+        self.store.upsert_product(p);
+        json!({"status": "ok", "sku": input.sku}).to_string()
+    }
+
+    #[tool(description = "Get product details and current pricing info by SKU.")]
+    async fn catalog_get(&self, Parameters(input): Parameters<SkuInput>) -> String {
+        match self.store.get_product(&input.sku) {
+            Some(p) => serde_json::to_string_pretty(&p).unwrap_or_default(),
+            None => json!({"error": "SKU_NOT_FOUND", "sku": input.sku}).to_string(),
+        }
+    }
+
+    #[tool(description = "List all products in the catalog.")]
+    async fn catalog_list(&self) -> String {
+        let products: Vec<_> = self.store.products.lock().unwrap().values().cloned().collect();
+        json!({"count": products.len(), "products": products}).to_string()
+    }
+
+    // === Pricing Rules ===
+
+    #[tool(description = "Create a pricing rule with a CEL condition and actions. Actions: set_price, pct_discount, absolute_discount, markup_pct, set_floor, set_ceiling, multiply_price.")]
+    async fn rules_create(&self, Parameters(input): Parameters<RuleInput>) -> String {
+        if let Err(e) = engine::validate_cel(&input.condition) {
+            return json!({"error": "CONDITION_PARSE_ERROR", "details": e}).to_string();
+        }
+        let actions: Vec<PricingAction> = input.actions.iter().filter_map(|a| {
+            Some(PricingAction { action_type: a["type"].as_str()?.into(), value: a["value"].as_f64()? })
+        }).collect();
+        let rule = PricingRule {
+            id: String::new(), name: input.name, description: input.description.unwrap_or_default(),
+            priority: input.priority.unwrap_or(100), condition: input.condition, actions,
+            segments: input.segments, channels: input.channels,
+            tags: input.tags.unwrap_or_default(), active: input.active.unwrap_or(false),
+            created_at: String::new(), updated_at: String::new(),
+        };
+        let id = self.store.add_rule(rule);
+        json!({"status": "created", "rule_id": id}).to_string()
+    }
+
+    #[tool(description = "List all pricing rules (optionally filter by active only).")]
+    async fn rules_list(&self) -> String {
+        let rules: Vec<_> = self.store.rules.lock().unwrap().clone();
+        json!({"count": rules.len(), "rules": rules}).to_string()
+    }
+
+    #[tool(description = "Activate a pricing rule by ID.")]
+    async fn rules_activate(&self, Parameters(input): Parameters<RuleIdInput>) -> String {
+        let mut rules = self.store.rules.lock().unwrap();
+        if let Some(r) = rules.iter_mut().find(|r| r.id == input.rule_id) {
+            r.active = true;
+            r.updated_at = now();
+            self.store.log_audit("rule", &input.rule_id, "activated", "system", json!({}));
+            json!({"status": "activated", "rule_id": input.rule_id}).to_string()
+        } else {
+            json!({"error": "RULE_NOT_FOUND", "rule_id": input.rule_id}).to_string()
+        }
+    }
+
+    #[tool(description = "Deactivate a pricing rule by ID.")]
+    async fn rules_deactivate(&self, Parameters(input): Parameters<RuleIdInput>) -> String {
+        let mut rules = self.store.rules.lock().unwrap();
+        if let Some(r) = rules.iter_mut().find(|r| r.id == input.rule_id) {
+            r.active = false;
+            r.updated_at = now();
+            self.store.log_audit("rule", &input.rule_id, "deactivated", "system", json!({}));
+            json!({"status": "deactivated", "rule_id": input.rule_id}).to_string()
+        } else {
+            json!({"error": "RULE_NOT_FOUND", "rule_id": input.rule_id}).to_string()
+        }
+    }
+
+    // === Segments ===
+
+    #[tool(description = "Create a customer segment with a CEL condition and default discount.")]
+    async fn segments_create(&self, Parameters(input): Parameters<SegmentInput>) -> String {
+        if let Err(e) = engine::validate_cel(&input.condition) {
+            return json!({"error": "CONDITION_PARSE_ERROR", "details": e}).to_string();
+        }
+        let seg = Segment {
+            id: String::new(), name: input.name, condition: input.condition,
+            priority: input.priority.unwrap_or(100), discount_pct: input.discount_pct.unwrap_or(0.0),
+            metadata: json!({}),
+        };
+        let id = self.store.add_segment(seg);
+        json!({"status": "created", "segment_id": id}).to_string()
+    }
+
+    #[tool(description = "List all customer segments.")]
+    async fn segments_list(&self) -> String {
+        let segs: Vec<_> = self.store.segments.lock().unwrap().clone();
+        json!({"count": segs.len(), "segments": segs}).to_string()
+    }
+
+    // === Promotions ===
+
+    #[tool(description = "Create a promotion (coupon, volume tier, BOGO, flash sale, loyalty). Supports CEL conditions and stacking.")]
+    async fn promotions_create(&self, Parameters(input): Parameters<PromoInput>) -> String {
+        let condition = input.condition.unwrap_or_default();
+        if !condition.is_empty() {
+            if let Err(e) = engine::validate_cel(&condition) {
+                return json!({"error": "CONDITION_PARSE_ERROR", "details": e}).to_string();
+            }
+        }
+        let promo = Promotion {
+            id: String::new(), name: input.name, promo_type: input.promo_type,
+            code: input.code, discount_type: input.discount_type, discount_value: input.discount_value,
+            condition, max_uses: input.max_uses, uses: 0,
+            valid_from: input.valid_from.unwrap_or_else(now),
+            valid_until: input.valid_until.unwrap_or_else(|| "2099-12-31T23:59:59Z".into()),
+            stackable: input.stackable.unwrap_or(false), active: true,
+        };
+        let id = self.store.add_promotion(promo);
+        json!({"status": "created", "promotion_id": id}).to_string()
+    }
+
+    #[tool(description = "List all promotions.")]
+    async fn promotions_list(&self) -> String {
+        let promos: Vec<_> = self.store.promotions.lock().unwrap().clone();
+        json!({"count": promos.len(), "promotions": promos}).to_string()
+    }
+
+    #[tool(description = "Apply a promotion code to a SKU and get the discounted price.")]
+    async fn promotions_apply(&self, Parameters(input): Parameters<PromoApplyInput>) -> String {
+        let product = match self.store.get_product(&input.sku) {
+            Some(p) => p,
+            None => return json!({"error": "SKU_NOT_FOUND"}).to_string(),
+        };
+        let promos = self.store.promotions.lock().unwrap().clone();
+        let promo = promos.iter().find(|p| p.code.as_deref() == Some(&input.code) || p.id == input.code);
+        match promo {
+            Some(p) if p.active => {
+                let discount = match p.discount_type.as_str() {
+                    "pct" => product.list_price * (p.discount_value / 100.0),
+                    "absolute" => p.discount_value,
+                    _ => 0.0,
+                };
+                let net = round2((product.list_price - discount).max(0.0));
+                json!({"sku": input.sku, "list_price": product.list_price, "discount": round2(discount), "net_price": net, "promotion": p.name, "line_total": round2(net * input.quantity)}).to_string()
+            }
+            _ => json!({"error": "PROMO_NOT_FOUND_OR_INACTIVE", "code": input.code}).to_string(),
+        }
+    }
+
+    // === Quotes ===
+
+    #[tool(description = "Create a quote for a customer. Prices are locked at calculation time.")]
+    async fn quotes_create(&self, Parameters(input): Parameters<QuoteInput>) -> String {
+        let currency = input.currency.unwrap_or_else(|| "USD".into());
+        let valid_days = input.valid_days.unwrap_or(30);
+        let mut lines = Vec::new();
+        let mut total_list = 0.0;
+        let mut total_net = 0.0;
+        let mut total_tax = 0.0;
+
+        for item in &input.items {
+            let sku = item["sku"].as_str().unwrap_or_default();
+            let qty = item["quantity"].as_f64().unwrap_or(1.0);
+            if let Some(product) = self.store.get_product(sku) {
+                let vars = engine::CelVars {
+                    sku: sku.into(), quantity: qty, channel: "direct".into(),
+                    customer_id: input.customer_id.clone(), segment: String::new(),
+                    country: "US".into(), annual_spend: 0.0,
+                    list_price: product.list_price, cost: product.cost, category: product.category.clone(),
+                };
+                let rules = self.store.get_active_rules();
+                let promos = self.store.get_active_promotions();
+                let (net, tax, _) = engine::run_waterfall(product.list_price, &rules, &promos, 0.0, 0.0, &vars, false);
+                total_list += product.list_price * qty;
+                total_net += net * qty;
+                total_tax += tax * qty;
+                lines.push(QuoteLine { sku: sku.into(), quantity: qty, list_price: product.list_price, net_price: net, discount: round2(product.list_price - net), tax, applied_rules: vec![] });
+            }
+        }
+
+        let valid_until = (chrono::Utc::now() + chrono::Duration::days(valid_days as i64)).to_rfc3339();
+        let quote = Quote {
+            id: String::new(), customer_id: input.customer_id, status: "draft".into(),
+            lines, currency, total_list: round2(total_list), total_net: round2(total_net),
+            total_discount: round2(total_list - total_net), total_tax: round2(total_tax),
+            valid_until, notes: input.notes.unwrap_or_default(), created_at: String::new(),
+        };
+        let id = self.store.create_quote(quote);
+        let q = self.store.quotes.lock().unwrap().get(&id).cloned();
+        serde_json::to_string_pretty(&q).unwrap_or_default()
+    }
+
+    #[tool(description = "Get a quote by ID.")]
+    async fn quotes_get(&self, Parameters(input): Parameters<QuoteIdInput>) -> String {
+        match self.store.quotes.lock().unwrap().get(&input.quote_id) {
+            Some(q) => serde_json::to_string_pretty(q).unwrap_or_default(),
+            None => json!({"error": "QUOTE_NOT_FOUND"}).to_string(),
+        }
+    }
+
+    #[tool(description = "Approve a quote (changes status to approved).")]
+    async fn quotes_approve(&self, Parameters(input): Parameters<QuoteIdInput>) -> String {
+        let mut quotes = self.store.quotes.lock().unwrap();
+        if let Some(q) = quotes.get_mut(&input.quote_id) {
+            q.status = "approved".into();
+            self.store.log_audit("quote", &input.quote_id, "approved", "system", json!({}));
+            json!({"status": "approved", "quote_id": input.quote_id}).to_string()
+        } else {
+            json!({"error": "QUOTE_NOT_FOUND"}).to_string()
+        }
+    }
+
+    // === Market Intelligence ===
+
+    #[tool(description = "Convert currency using live exchange rates (170+ currencies). Free, no API key.")]
+    async fn market_fx_convert(&self, Parameters(input): Parameters<CurrencyInput>) -> String {
         let url = format!("https://open.er-api.com/v6/latest/{}", input.from.to_uppercase());
         match self.client.get(&url).send().await {
             Ok(resp) => match resp.json::<Value>().await {
                 Ok(data) => {
                     let rate = data["rates"][input.to.to_uppercase()].as_f64().unwrap_or(0.0);
-                    if rate == 0.0 { return json!({"error": "Currency not found", "from": input.from, "to": input.to}).to_string(); }
-                    let converted = input.amount * rate;
-                    json!({"amount": input.amount, "from": input.from, "to": input.to, "rate": rate, "converted": round2(converted), "updated": data["time_last_update_utc"]}).to_string()
+                    if rate == 0.0 { return json!({"error": "FX_RATE_UNAVAILABLE"}).to_string(); }
+                    json!({"amount": input.amount, "from": input.from, "to": input.to, "rate": rate, "converted": round2(input.amount * rate)}).to_string()
                 }
-                Err(e) => format!("Error: {e}"),
+                Err(e) => json!({"error": "FX_RATE_UNAVAILABLE", "details": e.to_string()}).to_string(),
             },
-            Err(e) => format!("Error: {e}"),
+            Err(e) => json!({"error": "FX_RATE_UNAVAILABLE", "details": e.to_string()}).to_string(),
         }
     }
 
-    #[tool(description = "Calculate tax (VAT, GST, sales tax) by country/region. Covers 100+ countries with standard rates.")]
-    async fn calculate_tax(&self, Parameters(input): Parameters<TaxInput>) -> String {
-        let rate = if let Some(r) = input.custom_rate { r } else { get_tax_rate(&input.country, input.state.as_deref()) };
-        let tax_amount = input.amount * (rate / 100.0);
-        let total = input.amount + tax_amount;
-        let tax_type = input.tax_type.as_deref().unwrap_or(match input.country.as_str() { "US" => "sales_tax", "AU"|"IN"|"SG"|"NZ"|"CA" => "gst", _ => "vat" });
-        json!({"amount_before_tax": input.amount, "tax_rate_pct": rate, "tax_type": tax_type, "tax_amount": round2(tax_amount), "total": round2(total), "country": input.country, "state": input.state}).to_string()
-    }
-
-    #[tool(description = "Calculate tiered/volume pricing (e.g. API calls, storage, utilities). Each tier has a limit and per-unit price.")]
-    async fn calculate_tiered(&self, Parameters(input): Parameters<TieredInput>) -> String {
-        let currency = input.currency.as_deref().unwrap_or("USD");
-        let unit = input.unit.as_deref().unwrap_or("units");
-        let mut remaining = input.quantity;
-        let mut total = 0.0;
-        let mut breakdown = Vec::new();
-        let mut prev_limit = 0.0;
-        for tier in &input.tiers {
-            let limit = tier[0];
-            let price = tier[1];
-            let tier_size = if limit == 0.0 { remaining } else { (limit - prev_limit).min(remaining) };
-            if tier_size <= 0.0 { break; }
-            let cost = tier_size * price;
-            total += cost;
-            breakdown.push(json!({"range": format!("{}-{}", prev_limit as u64, if limit == 0.0 { "∞".into() } else { format!("{}", limit as u64) }), "quantity": tier_size, "rate": price, "cost": round2(cost)}));
-            remaining -= tier_size;
-            prev_limit = limit;
-            if remaining <= 0.0 { break; }
-        }
-        json!({"quantity": input.quantity, "unit": unit, "breakdown": breakdown, "total": round2(total), "currency": currency}).to_string()
-    }
-
-    #[tool(description = "Split payment between multiple parties (equal, percentage, or custom amounts). Works for group rides, shared bills, marketplace payouts.")]
-    async fn split_payment(&self, Parameters(input): Parameters<SplitInput>) -> String {
-        let currency = input.currency.as_deref().unwrap_or("USD");
-        let splits: Vec<Value> = match input.split_type.as_str() {
-            "equal" => (0..input.parties).map(|i| json!({"party": i+1, "amount": round2(input.total / input.parties as f64)})).collect(),
-            "percentage" => input.splits.unwrap_or_default().iter().enumerate().map(|(i, pct)| json!({"party": i+1, "percentage": pct, "amount": round2(input.total * pct / 100.0)})).collect(),
-            "custom" => input.splits.unwrap_or_default().iter().enumerate().map(|(i, amt)| json!({"party": i+1, "amount": round2(*amt)})).collect(),
-            _ => vec![json!({"error": "Unknown split_type"})],
-        };
-        json!({"total": input.total, "parties": input.parties, "split_type": input.split_type, "splits": splits, "currency": currency}).to_string()
-    }
-
-    #[tool(description = "Calculate profit margin and markup. Given cost, compute selling price from target margin or markup. Or given selling price, compute margin.")]
-    async fn calculate_margin(&self, Parameters(input): Parameters<MarginInput>) -> String {
-        let currency = input.currency.as_deref().unwrap_or("USD");
-        if let Some(margin) = input.margin_pct {
-            let selling = input.cost / (1.0 - margin / 100.0);
-            let profit = selling - input.cost;
-            json!({"cost": input.cost, "selling_price": round2(selling), "profit": round2(profit), "margin_pct": margin, "markup_pct": round2(profit / input.cost * 100.0), "currency": currency}).to_string()
-        } else if let Some(markup) = input.markup_pct {
-            let selling = input.cost * (1.0 + markup / 100.0);
-            let profit = selling - input.cost;
-            json!({"cost": input.cost, "selling_price": round2(selling), "profit": round2(profit), "margin_pct": round2(profit / selling * 100.0), "markup_pct": markup, "currency": currency}).to_string()
-        } else if let Some(selling) = input.selling_price {
-            let profit = selling - input.cost;
-            json!({"cost": input.cost, "selling_price": selling, "profit": round2(profit), "margin_pct": round2(profit / selling * 100.0), "markup_pct": round2(profit / input.cost * 100.0), "currency": currency}).to_string()
-        } else {
-            json!({"error": "Provide margin_pct, markup_pct, or selling_price"}).to_string()
+    #[tool(description = "Get live FX rates for multiple target currencies from a base currency.")]
+    async fn market_fx_rates(&self, Parameters(input): Parameters<FxRatesInput>) -> String {
+        let url = format!("https://open.er-api.com/v6/latest/{}", input.base.to_uppercase());
+        match self.client.get(&url).send().await {
+            Ok(resp) => match resp.json::<Value>().await {
+                Ok(data) => {
+                    let rates: Value = input.targets.iter().map(|t| (t.to_uppercase(), data["rates"][t.to_uppercase()].clone())).collect::<serde_json::Map<String, Value>>().into();
+                    json!({"base": input.base, "rates": rates, "updated": data["time_last_update_utc"]}).to_string()
+                }
+                Err(e) => json!({"error": e.to_string()}).to_string(),
+            },
+            Err(e) => json!({"error": e.to_string()}).to_string(),
         }
     }
 
-    #[tool(description = "Generate invoice totals from line items with tax and discount. Works for any business — services, products, consulting.")]
-    async fn calculate_invoice(&self, Parameters(input): Parameters<InvoiceInput>) -> String {
-        let currency = input.currency.as_deref().unwrap_or("USD");
-        let mut subtotal = 0.0;
-        let mut lines: Vec<Value> = Vec::new();
-        for item in &input.items {
-            let qty = item["quantity"].as_f64().unwrap_or(1.0);
-            let price = item["unit_price"].as_f64().unwrap_or(0.0);
-            let line_total = qty * price;
-            subtotal += line_total;
-            lines.push(json!({"description": item["description"], "quantity": qty, "unit_price": price, "line_total": round2(line_total)}));
-        }
-        let discount_amt = input.discount_pct.map(|d| subtotal * d / 100.0).unwrap_or(0.0);
-        let taxable = subtotal - discount_amt;
-        let tax_amt = input.tax_rate.map(|t| taxable * t / 100.0).unwrap_or(0.0);
-        let total = taxable + tax_amt;
-        json!({"lines": lines, "subtotal": round2(subtotal), "discount": round2(discount_amt), "discount_pct": input.discount_pct, "taxable_amount": round2(taxable), "tax": round2(tax_amt), "tax_rate_pct": input.tax_rate, "total": round2(total), "currency": currency}).to_string()
+    #[tool(description = "Calculate tax (VAT/GST/sales tax) for an amount by country. Covers 50+ countries.")]
+    async fn market_tax(&self, Parameters(input): Parameters<TaxInput>) -> String {
+        let rate = get_tax_rate(&input.country, input.state.as_deref());
+        let tax = round2(input.amount * rate / 100.0);
+        json!({"amount": input.amount, "country": input.country, "tax_rate_pct": rate, "tax": tax, "total": round2(input.amount + tax)}).to_string()
     }
 
-    #[tool(description = "Calculate surge/dynamic pricing multiplier from demand and supply ratio. Works for ride-hailing, event tickets, hotel rooms.")]
-    async fn calculate_surge(&self, Parameters(input): Parameters<SurgeInput>) -> String {
-        let base = input.base_multiplier.unwrap_or(1.0);
-        let max = input.max_multiplier.unwrap_or(5.0);
-        let ratio = if input.supply > 0.0 { input.demand / input.supply } else { max };
-        let multiplier = (base * ratio).min(max).max(1.0);
-        let level = if multiplier >= 3.0 { "extreme" } else if multiplier >= 2.0 { "high" } else if multiplier >= 1.5 { "moderate" } else { "normal" };
-        json!({"demand": input.demand, "supply": input.supply, "ratio": round2(ratio), "multiplier": round2(multiplier), "level": level, "capped_at": max}).to_string()
-    }
+    // === Audit ===
 
-    #[tool(description = "Calculate bundle pricing (multiple items with bundle discount). Works for product bundles, meal deals, service packages.")]
-    async fn calculate_bundle(&self, Parameters(input): Parameters<BundleInput>) -> String {
-        let currency = input.currency.as_deref().unwrap_or("USD");
-        let individual_total: f64 = input.items.iter().sum();
-        let discount = individual_total * (input.bundle_discount_pct / 100.0);
-        let bundle_price = individual_total - discount;
-        json!({"items": input.items.len(), "individual_total": round2(individual_total), "bundle_discount_pct": input.bundle_discount_pct, "discount": round2(discount), "bundle_price": round2(bundle_price), "per_item_avg": round2(bundle_price / input.items.len() as f64), "currency": currency}).to_string()
+    #[tool(description = "Query the audit log. Filter by entity_type (rule, product, quote, promotion) and entity_id.")]
+    async fn audit_log(&self, Parameters(input): Parameters<AuditInput>) -> String {
+        let audit = self.store.audit.lock().unwrap().clone();
+        let limit = input.limit.unwrap_or(50);
+        let filtered: Vec<_> = audit.iter().rev().filter(|e| {
+            input.entity_type.as_ref().map_or(true, |t| &e.entity_type == t) &&
+            input.entity_id.as_ref().map_or(true, |id| &e.entity_id == id)
+        }).take(limit).cloned().collect();
+        json!({"count": filtered.len(), "entries": filtered}).to_string()
     }
 }
 
-fn round2(v: f64) -> f64 { (v * 100.0).round() / 100.0 }
-
 fn get_tax_rate(country: &str, state: Option<&str>) -> f64 {
     match country.to_uppercase().as_str() {
-        "KE" => 16.0, "NG" => 7.5, "ZA" => 15.0, "GH" => 15.0, "TZ" => 18.0, "UG" => 18.0, "RW" => 18.0, "ET" => 15.0,
-        "US" => match state { Some("CA") => 7.25, Some("TX") => 6.25, Some("NY") => 8.0, Some("FL") => 6.0, Some("WA") => 6.5, Some("OR") => 0.0, Some("NH") => 0.0, _ => 5.0 },
-        "GB" | "UK" => 20.0, "DE" => 19.0, "FR" => 20.0, "IT" => 22.0, "ES" => 21.0, "NL" => 21.0, "BE" => 21.0, "AT" => 20.0, "SE" => 25.0, "NO" => 25.0, "DK" => 25.0, "FI" => 24.0, "PL" => 23.0, "IE" => 23.0, "PT" => 23.0, "CH" => 8.1, "CZ" => 21.0, "HU" => 27.0,
-        "AU" => 10.0, "NZ" => 15.0, "IN" => 18.0, "JP" => 10.0, "KR" => 10.0, "SG" => 9.0, "CN" => 13.0, "MY" => 6.0, "TH" => 7.0, "ID" => 11.0, "PH" => 12.0, "VN" => 10.0,
-        "CA" => 5.0, "BR" => 17.0, "MX" => 16.0, "AR" => 21.0, "CL" => 19.0, "CO" => 19.0,
-        "AE" | "SA" => 5.0, "EG" => 14.0, "IL" => 17.0, "TR" => 20.0,
+        "KE" => 16.0, "NG" => 7.5, "ZA" => 15.0, "GH" => 15.0, "TZ" => 18.0, "UG" => 18.0,
+        "US" => match state { Some("CA") => 7.25, Some("TX") => 6.25, Some("NY") => 8.0, Some("FL") => 6.0, _ => 5.0 },
+        "GB" | "UK" => 20.0, "DE" => 19.0, "FR" => 20.0, "IT" => 22.0, "ES" => 21.0, "NL" => 21.0,
+        "SE" => 25.0, "NO" => 25.0, "DK" => 25.0, "CH" => 8.1, "IE" => 23.0,
+        "AU" => 10.0, "NZ" => 15.0, "IN" => 18.0, "JP" => 10.0, "KR" => 10.0, "SG" => 9.0,
+        "CN" => 13.0, "BR" => 17.0, "MX" => 16.0, "AE" | "SA" => 5.0, "CA" => 5.0,
         _ => 0.0,
     }
 }

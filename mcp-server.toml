@@ -1,95 +1,158 @@
 server_id = "mcp_pricing"
-display_name = "Pricing"
-version = "1.0.0"
+display_name = "Pricing Engine"
+version = "2.0.0"
 domain = "pricing"
 sdk_version = "0.1.0"
-risk_level = "low"
-writes_allowed = "none"
+risk_level = "medium"
+writes_allowed = "gated"
 transports = ["stdio"]
 credentials = []
-governance_gates = []
+governance_gates = ["audit_all_changes"]
 environments = ["development", "staging", "production"]
 
 [[tools]]
-name = "calculate_fare"
-description = "Calculate transport fare"
+name = "price_calculate"
+description = "Calculate price through full waterfall with CEL rules"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "calculate_delivery"
-description = "Calculate delivery fee"
+name = "rules_validate"
+description = "Validate a CEL expression"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "apply_discount"
-description = "Apply discount/coupon"
+name = "catalog_upsert"
+description = "Add/update product in catalog"
+risk_class = "internal_write"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "catalog_get"
+description = "Get product by SKU"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "calculate_subscription"
-description = "Calculate subscription pricing"
+name = "catalog_list"
+description = "List all products"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "convert_currency"
-description = "Convert between 170+ currencies"
+name = "rules_create"
+description = "Create pricing rule with CEL condition"
+risk_class = "internal_write"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "rules_list"
+description = "List all pricing rules"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "calculate_tax"
-description = "Calculate VAT/GST/sales tax"
+name = "rules_activate"
+description = "Activate a pricing rule"
+risk_class = "internal_write"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "rules_deactivate"
+description = "Deactivate a pricing rule"
+risk_class = "internal_write"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "segments_create"
+description = "Create customer segment"
+risk_class = "internal_write"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "segments_list"
+description = "List customer segments"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "calculate_tiered"
-description = "Calculate tiered/volume pricing"
+name = "promotions_create"
+description = "Create promotion"
+risk_class = "internal_write"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "promotions_list"
+description = "List promotions"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "split_payment"
-description = "Split payment between parties"
+name = "promotions_apply"
+description = "Apply promotion code to SKU"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "calculate_margin"
-description = "Calculate profit margin/markup"
+name = "quotes_create"
+description = "Create a price quote"
+risk_class = "internal_write"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "quotes_get"
+description = "Get quote by ID"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "calculate_invoice"
-description = "Generate invoice totals"
+name = "quotes_approve"
+description = "Approve a quote"
+risk_class = "internal_write"
+requires_approval = true
+credential_bindings = []
+
+[[tools]]
+name = "market_fx_convert"
+description = "Convert currency (170+ currencies)"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "calculate_surge"
-description = "Calculate dynamic pricing multiplier"
+name = "market_fx_rates"
+description = "Get live FX rates"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
 
 [[tools]]
-name = "calculate_bundle"
-description = "Calculate bundle pricing"
+name = "market_tax"
+description = "Calculate tax by country"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "audit_log"
+description = "Query audit trail"
 risk_class = "read_only"
 requires_approval = false
 credential_bindings = []
