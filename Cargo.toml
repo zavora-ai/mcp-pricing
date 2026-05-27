@@ -1,0 +1,21 @@
+[workspace]
+
+[package]
+name = "mcp-pricing"
+version = "1.0.0"
+edition = "2024"
+description = "Multi-vertical pricing engine MCP server — fare calculation, dynamic pricing, currency conversion, tax, subscriptions, tiered pricing, discounts, invoicing"
+license = "Apache-2.0"
+repository = "https://github.com/zavora-ai/mcp-pricing"
+keywords = ["mcp", "pricing", "billing", "currency", "invoicing"]
+categories = ["api-bindings"]
+
+[dependencies]
+adk-mcp-sdk = "0.1"
+rmcp = { version = "1.7", features = ["server", "transport-io", "macros"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }

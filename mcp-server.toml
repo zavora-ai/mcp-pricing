@@ -1,0 +1,95 @@
+server_id = "mcp_pricing"
+display_name = "Pricing"
+version = "1.0.0"
+domain = "pricing"
+sdk_version = "0.1.0"
+risk_level = "low"
+writes_allowed = "none"
+transports = ["stdio"]
+credentials = []
+governance_gates = []
+environments = ["development", "staging", "production"]
+
+[[tools]]
+name = "calculate_fare"
+description = "Calculate transport fare"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "calculate_delivery"
+description = "Calculate delivery fee"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "apply_discount"
+description = "Apply discount/coupon"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "calculate_subscription"
+description = "Calculate subscription pricing"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "convert_currency"
+description = "Convert between 170+ currencies"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "calculate_tax"
+description = "Calculate VAT/GST/sales tax"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "calculate_tiered"
+description = "Calculate tiered/volume pricing"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "split_payment"
+description = "Split payment between parties"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "calculate_margin"
+description = "Calculate profit margin/markup"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "calculate_invoice"
+description = "Generate invoice totals"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "calculate_surge"
+description = "Calculate dynamic pricing multiplier"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
+
+[[tools]]
+name = "calculate_bundle"
+description = "Calculate bundle pricing"
+risk_class = "read_only"
+requires_approval = false
+credential_bindings = []
