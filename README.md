@@ -6,7 +6,7 @@
 [![ADK-Rust Enterprise](https://img.shields.io/badge/ADK--Rust-Enterprise-purple.svg)](https://enterprise.adk-rust.com)
 [![Registry Ready](https://img.shields.io/badge/ADK_Registry-Ready-green.svg)](https://enterprise.adk-rust.com)
 
-Enterprise pricing engine for [ADK-Rust Enterprise](https://enterprise.adk-rust.com) agents. Provides 21 MCP tools covering the full pricing lifecycle — CEL rule engine, price waterfall, product catalog, customer segments, promotions, quotes/CPQ, market intelligence, and audit trail. **Vertical-agnostic**: works for ride-hailing, SaaS, e-commerce, logistics, marketplaces, and professional services.
+Enterprise pricing engine for [ADK-Rust Enterprise](https://enterprise.adk-rust.com) agents. Provides 26 MCP tools covering the full pricing lifecycle — CEL rule engine, price waterfall, product catalog, customer segments, promotions, quotes/CPQ, market intelligence, and audit trail. **Vertical-agnostic**: works for ride-hailing, SaaS, e-commerce, logistics, marketplaces, and professional services.
 
 ## Architecture
 
@@ -52,6 +52,11 @@ Enterprise pricing engine for [ADK-Rust Enterprise](https://enterprise.adk-rust.
 | `rules_list` | List all pricing rules | read-only |
 | `rules_activate` | Activate a rule (starts affecting prices) | write |
 | `rules_deactivate` | Deactivate a rule (stops affecting prices) | write |
+| `rules_update` | Edit a rule (creates new version, preserves history) | write |
+| `rules_history` | Get version history of a rule | read-only |
+| `rules_schedule` | Schedule activation/deactivation at specific times | write |
+| `rules_conflicts` | Detect conflicting rules at same priority | read-only |
+| `rules_test` | Dry-run a rule against test cases (pass/fail) | read-only |
 | `rules_validate` | Validate a CEL expression without saving | read-only |
 
 ### Product Catalog
@@ -348,6 +353,71 @@ item.channel == "marketplace"
 }
 ```
 
+### 7. Update a rule (versioned)
+
+```json
+{
+  "name": "rules_update",
+  "arguments": {
+    "rule_id": "rule_bf5d0b54",
+    "condition": "item.quantity >= 20",
+    "reason": "Raised threshold from 10 to 20 based on margin analysis"
+  }
+}
+```
+
+**Response:** `{"status": "updated", "rule_id": "rule_bf5d0b54", "version": 2}`
+
+### 8. Schedule a flash sale rule
+
+```json
+{
+  "name": "rules_schedule",
+  "arguments": {
+    "rule_id": "rule_flash_sale",
+    "schedule_from": "2026-06-01T00:00:00Z",
+    "schedule_until": "2026-06-03T23:59:59Z"
+  }
+}
+```
+
+### 9. Detect rule conflicts
+
+```json
+{ "name": "rules_conflicts", "arguments": {} }
+```
+
+**Response:**
+```json
+{
+  "conflicts": 1,
+  "details": [{
+    "rule_a": {"id": "rule_1", "name": "Bulk 20%", "priority": 10},
+    "rule_b": {"id": "rule_2", "name": "Bulk 25%", "priority": 10},
+    "reason": "Same priority with overlapping scope",
+    "suggestion": "Change priority of one rule to establish deterministic ordering"
+  }]
+}
+```
+
+### 10. Dry-run test a rule
+
+```json
+{
+  "name": "rules_test",
+  "arguments": {
+    "rule_condition": "item.quantity >= 10",
+    "rule_actions": [{"type": "pct_discount", "value": 15}],
+    "test_cases": [
+      {"sku": "WIDGET", "quantity": 5, "list_price": 100, "expected_price": 100},
+      {"sku": "WIDGET", "quantity": 15, "list_price": 100, "expected_price": 85}
+    ]
+  }
+}
+```
+
+**Response:** `{"passed": true, "cases": 2, "results": [...]}`
+
 ## Tax Coverage (50+ Countries)
 
 | Region | Countries | Rate Range |
@@ -435,11 +505,11 @@ governance_gates = ["audit_all_changes"]
 
 ## Roadmap
 
-### v2.1 — Advanced Rules
-- Rule versioning (edit without losing history)
-- Conflict detection (overlapping rules)
-- Rule testing (dry-run against test cases)
-- Scheduled activation/deactivation
+### ~~v2.1 — Advanced Rules~~ ✅ Done
+- ~~Rule versioning (edit without losing history)~~
+- ~~Conflict detection (overlapping rules)~~
+- ~~Rule testing (dry-run against test cases)~~
+- ~~Scheduled activation/deactivation~~
 
 ### v2.2 — Analytics
 - Revenue by segment report

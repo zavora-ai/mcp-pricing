@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.1.0] - 2026-05-27
+
+### Added — Advanced Rules
+- `rules_update` — edit rules with full version history (old versions preserved)
+- `rules_history` — get all versions of a rule with timestamps and change reasons
+- `rules_schedule` — schedule activation/deactivation at specific times (ISO datetime)
+- `rules_conflicts` — detect overlapping rules at same priority with resolution suggestions
+- `rules_test` — dry-run a rule (existing or ad-hoc) against test cases with pass/fail results
+- Version tracking on all rules (auto-increments on each edit)
+- Schedule-aware `get_active_rules` — respects `schedule_from` and `schedule_until`
+
 ## [2.0.0] - 2026-05-27
 
 ### Added — Enterprise Pricing Engine
